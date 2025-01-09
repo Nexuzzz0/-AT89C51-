@@ -1,0 +1,255 @@
+C51 COMPILER V9.52.0.0   LQ                                                                01/09/2025 19:38:08 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE LQ
+OBJECT MODULE PLACED IN lq.OBJ
+COMPILER INVOKED BY: D:\app\c51\C51\BIN\C51.EXE lq.c BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "reg52.h"  
+   2          
+   3          typedef unsigned int uint;   
+   4          typedef unsigned char uchar;
+   5          
+   6          sbit LSA = P2^0;      // 38译码器
+   7          sbit LSB = P2^1;
+   8          sbit LSC = P2^2;
+   9          sbit LSD = P2^3;      // 蜂鸣器
+  10          sbit F1 = P2^4;       // 倒计时数码管控制器
+  11          sbit F2 = P2^5;
+  12          sbit S1 = P2^6;
+  13          sbit S2 = P2^7;
+  14          
+  15          uchar KeyValue;
+  16          uchar feng = 0;  
+  17          uint feng_count = 0; 
+  18          
+  19          #define GPIO_DIG P0    // 计分数码管输出口
+  20          #define GPIO_KEY P1    // 按键输入
+  21          #define GPIO_TIME P3   // 倒计时数码管输出口
+  22          
+  23          uchar code DIG_CODE[10] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f}; // 0-9
+  24          unsigned char Show[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };    // 存放向数码管输入的数
+  25          unsigned char TShow[4] = { 0, 0, 0, 0 };
+  26          
+  27          uint Ascore, Bscore, Change;  
+  28          uchar Period;             
+  29          uchar m = 10, n = 0, c;    
+  30          
+  31          void delay(uint i)
+  32          {
+  33   1          while(i--); 
+  34   1      }
+  35          
+  36          // 按键检测
+  37          void KeyDown(void)
+  38          {
+  39   1          char a = 0;
+  40   1          GPIO_KEY = 0x0f;
+  41   1          KeyValue = 20; 
+  42   1          
+  43   1          if(GPIO_KEY != 0x0f) 
+  44   1          {
+  45   2              delay(100);
+  46   2              if(GPIO_KEY != 0x0f)
+  47   2              { 
+  48   3                  // ???
+  49   3                  GPIO_KEY = 0X0F;
+  50   3                  switch(GPIO_KEY)
+  51   3                  {
+  52   4                      case(0X0E): KeyValue = 0; break;
+  53   4                      case(0X0D): KeyValue = 4; break;
+  54   4                      case(0X0B): KeyValue = 8; break;
+  55   4                      case(0X07): KeyValue = 12; break;
+C51 COMPILER V9.52.0.0   LQ                                                                01/09/2025 19:38:08 PAGE 2   
+
+  56   4                  }
+  57   3                  GPIO_KEY = 0XF0;
+  58   3                  switch(GPIO_KEY)
+  59   3                  {
+  60   4                      case(0X70): KeyValue = KeyValue; break;
+  61   4                      case(0XB0): KeyValue = KeyValue + 1; break;
+  62   4                      case(0XD0): KeyValue = KeyValue + 2; break;
+  63   4                      case(0XE0): KeyValue = KeyValue + 3; break;
+  64   4                  }
+  65   3                  while((a < 500) && (GPIO_KEY != 0xf0)) // 按键松开
+  66   3                  {
+  67   4                      delay(1000);
+  68   4                      a++;
+  69   4                  }
+  70   3              }
+  71   2          }
+  72   1      }
+  73          
+  74          //  比分控制
+  75          void Score()
+  76          {
+  77   1          if(KeyValue != 20)
+  78   1              switch(KeyValue) // A
+  79   1              {
+  80   2                  case(0): Ascore = Ascore + 1; KeyValue = 20; break;  
+  81   2                  case(3): Ascore = Ascore - 1; KeyValue = 20; break;
+  82   2              }
+  83   1              switch(KeyValue) // B
+  84   1              {
+  85   2                  case(4): Bscore = Bscore + 1; KeyValue = 20; break;
+  86   2                  case(7): Bscore = Bscore - 1; KeyValue = 20; break;
+  87   2              }
+  88   1              switch(KeyValue)
+  89   1              {
+  90   2                  case(8): Period = Period + 1; KeyValue = 20; break;    // 节数增加
+  91   2                  case(12): TR0 = 1; m = 10;  n = 0; feng = 1; KeyValue = 20; break;     // 比赛开始
+  92   2                  case(13): TR0 = 1; feng = 1; KeyValue = 20; break;                           // 比赛继续
+  93   2                  case(14): feng = 1; TR0 = 0; KeyValue = 20; break;            // 比赛暂停
+  94   2                  case(15): feng = 0; KeyValue = 20; break;                    // 蜂鸣器关闭
+  95   2              }
+  96   1      }
+  97          
+  98          // 蜂鸣器
+  99          void fengMQ(void)
+ 100          {
+ 101   1          if (feng == 1)  
+ 102   1          {
+ 103   2              LSD = 1; 
+ 104   2              feng_count++; 
+ 105   2      
+ 106   2              if (feng_count >= 2000)  // 2s(1ms计时一次)
+ 107   2              {
+ 108   3                  feng = 0;         
+ 109   3                  feng_count = 0;   
+ 110   3                  LSD = 0;          
+ 111   3              }
+ 112   2          }
+ 113   1      }
+ 114          
+ 115          // 数码管数字
+ 116          void Conut(void)
+ 117          {
+C51 COMPILER V9.52.0.0   LQ                                                                01/09/2025 19:38:08 PAGE 3   
+
+ 118   1          Show[0] = Period % 10;
+ 119   1          Show[1] = Ascore / 100;
+ 120   1          Show[2] = Ascore / 10 % 10;
+ 121   1          Show[3] = Ascore % 10;
+ 122   1          
+ 123   1          Show[4] = 0;
+ 124   1          Show[5] = Bscore / 100;
+ 125   1          Show[6] = Bscore / 10 % 10;
+ 126   1          Show[7] = Bscore % 10;
+ 127   1          
+ 128   1          TShow[0] = m / 10;
+ 129   1          TShow[1] = m % 10;
+ 130   1          TShow[2] = n / 10;
+ 131   1          TShow[3] = n % 10;
+ 132   1      }
+ 133          
+ 134          // 数码管动态扫描
+ 135          void DigDisplay()
+ 136          {
+ 137   1          uchar i, w;
+ 138   1          for(i = 0; i < 8; i++)
+ 139   1          {
+ 140   2              switch(i)   // 位选，选择点亮的数码管，比分显示
+ 141   2              {
+ 142   3                  case(0):
+ 143   3                      LSA = 0; LSB = 0; LSC = 0; break;
+ 144   3                  case(1):
+ 145   3                      LSA = 1; LSB = 0; LSC = 0; break;
+ 146   3                  case(2):
+ 147   3                      LSA = 0; LSB = 1; LSC = 0; break;
+ 148   3                  case(3):
+ 149   3                      LSA = 1; LSB = 1; LSC = 0; break;
+ 150   3                  case(4):
+ 151   3                      LSA = 0; LSB = 0; LSC = 1; break;
+ 152   3                  case(5):
+ 153   3                      LSA = 1; LSB = 0; LSC = 1; break;
+ 154   3                  case(6):
+ 155   3                      LSA = 0; LSB = 1; LSC = 1; break;
+ 156   3                  case(7):
+ 157   3                      LSA = 1; LSB = 1; LSC = 1; break; 
+ 158   3              }
+ 159   2              GPIO_DIG = DIG_CODE[Show[i]]; // 发送段码
+ 160   2              delay(10); 
+ 161   2              P0 = 0x00;
+ 162   2          }
+ 163   1          for(w = 0; w < 4; w++) // 倒计时显示
+ 164   1          {
+ 165   2              switch(w)  
+ 166   2              {
+ 167   3                  case(0):
+ 168   3                      F1 = 0; F2 = 1; S1 = 1; S2 = 1; break;
+ 169   3                  case(1):
+ 170   3                      F1 = 1; F2 = 0; S1 = 1; S2 = 1; break;
+ 171   3                  case(2):
+ 172   3                      F1 = 1; F2 = 1; S1 = 0; S2 = 1; break;
+ 173   3                  case(3):
+ 174   3                      F1 = 1; F2 = 1; S1 = 1; S2 = 0; break;  
+ 175   3              }
+ 176   2              GPIO_TIME = DIG_CODE[TShow[w]];
+ 177   2              delay(10); 
+ 178   2              P3 = 0x00;   
+ 179   2          }
+C51 COMPILER V9.52.0.0   LQ                                                                01/09/2025 19:38:08 PAGE 4   
+
+ 180   1      }
+ 181          
+ 182          // 定时器初始化
+ 183          void Timer0Init()
+ 184          {
+ 185   1          TMOD |= 0x01; // 工作方式1
+ 186   1          TH0 = 0xFC;  // 设置初始值，定时1ms
+ 187   1          TL0 = 0x18; 
+ 188   1          EA = 1;      // 打开中断
+ 189   1          ET0 = 1;     // 打开定时器0中断
+ 190   1          TR0 = 0;     // 初始化不启动定时器
+ 191   1      }
+ 192          
+ 193          void main()
+ 194          { 
+ 195   1          Timer0Init();
+ 196   1          while(1)
+ 197   1          { 
+ 198   2              KeyDown();
+ 199   2              Score();          
+ 200   2              Conut();        
+ 201   2              fengMQ();     
+ 202   2              DigDisplay();     
+ 203   2          }   
+ 204   1      }
+ 205          
+ 206          void Timer0() interrupt 1   
+ 207          {
+ 208   1          static uint q;  
+ 209   1          TH0 = 0xFC; 
+ 210   1          TL0 = 0x18; 
+ 211   1          q++;
+ 212   1          if(q == 1000) // 计时1000次，1s    65536 - 64536 = 1000  
+ 213   1          {
+ 214   2              q = 0;         
+ 215   2              if(n == 0) // 秒钟为0，分钟-1
+ 216   2              {
+ 217   3                  n = 59; 
+ 218   3                  m = m - 1;
+ 219   3              }
+ 220   2              n = n - 1; // 秒针-1
+ 221   2          }
+ 222   1          if(m == 0 && n == 0)  //  一节结束时间重置
+ 223   1          {
+ 224   2              TR0 = 0; 
+ 225   2          }
+ 226   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    739    ----
+   CONSTANT SIZE    =     10    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     28       1
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
